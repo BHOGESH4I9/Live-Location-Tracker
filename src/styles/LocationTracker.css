@@ -1,0 +1,117 @@
+/* ==== Custom Gradient Button ==== */
+.custom-gradient-btn {
+  background: linear-gradient(to right, #6863f3, #2489cc);
+  border: none;
+  color: white;
+  font-weight: 500;
+  font-size: 0.95rem;
+  padding: 0.5rem 1.2rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-gradient-btn:hover {
+  background: linear-gradient(to right, #5a55e0, #1b78b7);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+}
+
+.custom-gradient-btn:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.custom-gradient-btn:focus-visible {
+  outline: 2px solid #2489cc;
+  outline-offset: 2px;
+}
+
+
+/* ==== User Info Styling ==== */
+.user-info-box {
+  background: #f5f7ff;
+  border: 1px solid #dce4f9;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.user-info-label {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.user-info-text {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+
+/* ==== Button with Info Pairing ==== */
+.button-with-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #dee2e6;
+}
+
+.button-info-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #333;
+  word-break: break-word;
+}
+
+
+/* ==== Wrapper Card for Right Panel ==== */
+.user-action-panel {
+  background: #ffffff;
+  padding: 1.5rem 1.75rem;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+
+/* ==== Responsive Map Height + Padding Adjustments ==== */
+@media (max-width: 768px) {
+  .map-container {
+    height: 300px !important;
+  }
+
+  .button-info-text {
+    font-size: 0.85rem;
+  }
+
+  .location-card {
+    padding: 1rem !important;
+  }
+}
+
+
+/* ==== Mobile Friendly Button Stack ==== */
+@media (max-width: 576px) {
+  .button-with-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .user-action-panel {
+    padding: 1rem 1.25rem;
+  }
+}
