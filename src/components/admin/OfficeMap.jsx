@@ -309,7 +309,7 @@ const officeLocation = {
   lat: 17.43542607603663,
   lng: 78.45767098753461,
 };
-const OFFICE_RADIUS_METERS = 100;
+const OFFICE_RADIUS_METERS = 2000;
 
 const officeIcon = new L.Icon({
   iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
