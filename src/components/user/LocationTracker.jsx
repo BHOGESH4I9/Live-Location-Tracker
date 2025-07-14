@@ -378,7 +378,7 @@ const OFFICE_LOCATION = {
   lat: 17.43542607603663,
   lng: 78.45767098753461,
 };
-const OFFICE_RADIUS_METERS = 100;
+const OFFICE_RADIUS_METERS = 2000;
 
 const getDistanceFromLatLonInMeters = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3;
