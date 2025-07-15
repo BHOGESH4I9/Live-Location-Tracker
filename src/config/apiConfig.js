@@ -1,1 +1,1 @@
-export const OPENCAGE_API_KEY = "92ddf8f4f1444281bf921265ced62cb5";
+export const OPENCAGE_API_KEY = process.env.REACT_APP_OPENCAGE_API_KEY;
