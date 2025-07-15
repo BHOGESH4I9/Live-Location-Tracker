@@ -164,7 +164,6 @@ const CheckinTable = () => {
               <tr>
                 <th>Date</th>
                 <th>Username</th>
-                <th>Address</th>
                 <th>Check-In Time</th>
                 <th>Check-Out Time</th>
               </tr>
@@ -178,7 +177,6 @@ const CheckinTable = () => {
                   <tr key={idx}>
                     <td>{entry.date}</td>
                     <td>{entry.username}</td>
-                    <td>{entry.address}</td>
                     <td>{entry.checkIn || '-'}</td>
                     <td>{entry.checkOut || '-'}</td>
                   </tr>
