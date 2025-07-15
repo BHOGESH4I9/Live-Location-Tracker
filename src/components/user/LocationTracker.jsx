@@ -1,20 +1,20 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Container, Row, Col, Button, Spinner, Alert} from 'react-bootstrap';
+import { Container, Row, Col, Button, Spinner, Alert } from 'react-bootstrap';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import {
-  collection,
-  setDoc,
-  doc,
-  getDoc,
-  addDoc,
-} from 'firebase/firestore';
-import { auth, db } from '../../config/firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from '../../config/firebaseConfig';
 import { OPENCAGE_API_KEY } from '../../config/apiConfig';
 import { FaLocationArrow, FaClock } from 'react-icons/fa';
+import { HiBuildingOffice2 } from "react-icons/hi2";
 import '../../styles/LocationTracker.css';
+
+// Import our new services
+import { LocationService } from './locationService'; 
+import { AttendanceService } from './attendanceService'; 
+import { renderToString } from 'react-dom/server';
 
 const gpsIcon = new L.Icon({
   iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
@@ -22,26 +22,21 @@ const gpsIcon = new L.Icon({
   iconAnchor: [17, 42],
 });
 
+const officeIcon = new L.DivIcon({
+    // Render the React component to an HTML string
+    html: renderToString(<HiBuildingOffice2 />),
+    // Use the CSS class you just created
+    className: 'office-react-icon',
+    // Set the size and anchor point
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+});
+
 const OFFICE_LOCATION = {
   lat: 17.43542607603663,
   lng: 78.45767098753461,
 };
 const OFFICE_RADIUS_METERS = 100;
-
-const getDistanceFromLatLonInMeters = (lat1, lon1, lat2, lon2) => {
-  const R = 6371e3;
-  const toRad = (deg) => deg * (Math.PI / 180);
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
 
 const LocationTracker = () => {
   const [position, setPosition] = useState(null);
@@ -55,7 +50,6 @@ const LocationTracker = () => {
   const [checkInStatus, setCheckInStatus] = useState(null);
 
   const mapRef = useRef(null);
-  const watchIdRef = useRef(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -69,145 +63,56 @@ const LocationTracker = () => {
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (watchIdRef.current)
-        navigator.geolocation.clearWatch(watchIdRef.current);
-    };
-  }, []);
-
-  const reverseGeocodeAndStore = async (latitude, longitude) => {
+  const getLocation = async () => {
+    setIsFetchingLocation(true);
+    setLocationError('');
+    setCheckInStatus(null);
     try {
-      const apiUrl = `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${OPENCAGE_API_KEY}&limit=1&no_annotations=1`;
-      const res = await fetch(apiUrl);
-      const data = await res.json();
+      const coords = await LocationService.getAccuratePosition();
+      const newPosition = [coords.latitude, coords.longitude];
+      setPosition(newPosition);
 
-      const formatted = data?.results?.[0]?.formatted || 'Unknown';
-      setAddress(formatted);
+      const newAddress = await LocationService.reverseGeocode(coords.latitude, coords.longitude, OPENCAGE_API_KEY);
+      setAddress(newAddress);
 
-      if (auth.currentUser) {
-        await setDoc(doc(db, 'user_locations', auth.currentUser.uid), {
-          username: username || auth.currentUser.email,
-          location: {
-            latitude,
-            longitude,
-            address: formatted,
-            timestamp: new Date(),
-          },
-        });
-      }
-    } catch (err) {
-      console.error('Geocode error:', err);
-      setAddress('Unknown');
+      // Also update the live location in the database
+      await LocationService.updateUserLocationInDb(auth.currentUser, username, {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        address: newAddress,
+      });
+
+    } catch (error) {
+      setLocationError(error.message);
     } finally {
       setIsFetchingLocation(false);
     }
   };
 
-  const getLocation = () => {
-    setIsFetchingLocation(true);
-    setLocationError('');
-    let bestPosition = null;
+  const handleCheckToggle = async () => {
+    try {
+      const result = await AttendanceService.handleCheckInOrOut({
+        isCheckedIn,
+        position,
+        officeLocation: OFFICE_LOCATION,
+        radius: OFFICE_RADIUS_METERS,
+        user: auth.currentUser,
+        username,
+        address,
+      });
+      
+      // Update state based on the result from the service
+      if (result.newIsCheckedIn !== undefined) setIsCheckedIn(result.newIsCheckedIn);
+      if (result.newCheckInTime !== undefined) setCheckInTime(result.newCheckInTime);
+      if (result.newCheckOutTime !== undefined) setCheckOutTime(result.newCheckOutTime);
+      if (result.newStatus !== undefined) setCheckInStatus(result.newStatus);
 
-    const options = {
-      enableHighAccuracy: false,
-      timeout: 15000,
-      maximumAge: 0,
-    };
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) {
-          bestPosition = pos;
-          setPosition([pos.coords.latitude, pos.coords.longitude]);
-        }
-      },
-      (err) => {
-        setLocationError(err.message);
-        setIsFetchingLocation(false);
-      },
-      options
-    );
-
-    setTimeout(() => {
-      if (watchIdRef.current)
-        navigator.geolocation.clearWatch(watchIdRef.current);
-
-      if (bestPosition) {
-        const { latitude, longitude } = bestPosition.coords;
-        setPosition([latitude, longitude]);
-        reverseGeocodeAndStore(latitude, longitude);
-      } else {
-        setLocationError('Failed to acquire accurate location.');
-        setIsFetchingLocation(false);
-      }
-    }, 4000);
+    } catch (error) {
+      console.error('Check-in/out error:', error);
+      setCheckInStatus({ message: 'An error occurred. Please try again.', color: 'danger'});
+    }
   };
 
-  const handleCheckToggle = async () => {
-  try {
-    const currentUser = auth.currentUser;
-    if (!currentUser || !position) return;
-
-    const [lat, lng] = position;
-    const distance = getDistanceFromLatLonInMeters(lat, lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-
-    // Check-in Logic
-    if (!isCheckedIn) {
-      if (distance <= OFFICE_RADIUS_METERS) {
-        const now = new Date().toLocaleString();
-        setIsCheckedIn(true);
-        setCheckInTime(now);
-        setCheckOutTime(null);
-        setCheckInStatus({
-          message: '✅ Check-in successful. You are at the office.',
-          color: 'success',
-        });
-
-        await addDoc(collection(db, 'checkins'), {
-          userId: currentUser.uid,
-          username: username || currentUser.email,
-          checkedIn: true,
-          timestamp: new Date(),
-          location: {
-            latitude: lat,
-            longitude: lng,
-            address: address || 'Unknown',
-          },
-        });
-      } else {
-        const readableDistance =
-          distance < 1000 ? `${Math.round(distance)} meters` : `${(distance / 1000).toFixed(2)} km`;
-        setCheckInStatus({
-          message: `❌ Not in range. Distance to office: ${readableDistance}`,
-          color: 'danger',
-        });
-      }
-    }
-
-    // Check-out Logic
-    else {
-      const now = new Date().toLocaleString();
-      setIsCheckedIn(false);
-      setCheckOutTime(now);
-      setCheckInStatus(null);
-
-      await addDoc(collection(db, 'checkins'), {
-        userId: currentUser.uid,
-        username: username || currentUser.email,
-        checkedIn: false,
-        timestamp: new Date(),
-        location: {
-          latitude: lat,
-          longitude: lng,
-          address: address || 'Unknown',
-        },
-      });
-    }
-  } catch (err) {
-    console.error('Check-in/out error:', err);
-  }
-};
   return (
     <Container fluid className="location-wrapper">
       <Row className="justify-content-center">
@@ -223,116 +128,56 @@ const LocationTracker = () => {
                   className="rounded shadow-sm map-container"
                   whenCreated={(map) => (mapRef.current = map)}
                 >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution="&copy; OpenStreetMap contributors"
-                  />
-
-                  {/* User's Current Location */}
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap contributors" />
                   <Marker position={position} icon={gpsIcon}>
-                    <Popup>
-                      <strong>{username || 'User'}</strong>
-                      <br />
-                      {address || 'Locating...'}
-                    </Popup>
+                    <Popup><strong>{username || 'User'}</strong><br />{address || 'Locating...'}</Popup>
                   </Marker>
-
-                  {/* Office Radius Circle */}
-                  <Circle
-                    center={OFFICE_LOCATION}
-                    radius={OFFICE_RADIUS_METERS}
-                    pathOptions={{ color: '#6863f3', fillColor: '#6863f3', fillOpacity: 0.1 }}
-                  />
-
-                  {/* Office Landmark Icon */}
-                  <Marker
-                    position={OFFICE_LOCATION}
-                    icon={new L.Icon({
-                      iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // Office Mark Location
-                      iconSize: [40, 40],
-                      iconAnchor: [20, 40],
-                    })}
-                  >
-                    <Popup>
-                      <strong>Office</strong><br />
-                      Landmark
-                    </Popup>
+                  <Circle center={OFFICE_LOCATION} radius={OFFICE_RADIUS_METERS} pathOptions={{ color: '#6863f3', fillColor: '#6863f3', fillOpacity: 0.1 }} />
+                  <Marker position={OFFICE_LOCATION} icon={officeIcon}>
+                    <Popup><strong>Office Location</strong></Popup>
                   </Marker>
                 </MapContainer>
-
               ) : (
                 <div className="d-flex flex-column justify-content-center align-items-center border rounded bg-light" style={{ height: '400px' }}>
-                  <Spinner animation="border" className="mb-3" />
-                  <p className="text-muted">Waiting for location...</p>
+                  {isFetchingLocation ? (
+                    <><Spinner animation="border" className="mb-3" /><p className="text-muted">Acquiring GPS signal...</p></>
+                  ) : (
+                    <p className="text-muted">Click "Get My Address" to begin.</p>
+                  )}
                 </div>
               )}
             </Col>
-
             <Col md={6}>
               <div className="user-action-panel shadow-sm">
-                <h3 >User Information</h3>
-                <p className="user-info-label">
-                  Username: <span className="user-info-text">{username || 'Unknown'}</span>
-                </p>
-                <p className="user-info-label">
-                  Email: <span className="user-info-text">{auth.currentUser?.email || 'N/A'}</span>
-                </p>
-
+                <h3>User Information</h3>
+                <p className="user-info-label">Username: <span className="user-info-text">{username || 'Unknown'}</span></p>
+                <p className="user-info-label">Email: <span className="user-info-text">{auth.currentUser?.email || 'N/A'}</span></p>
                 <h5 className="fw-semibold mt-3">Actions</h5>
-
                 <div className="button-with-info shadow-sm">
-                  <Button
-                    onClick={getLocation}
-                    disabled={isFetchingLocation}
-                    className="custom-gradient-btn"
-                  >
+                  <Button onClick={getLocation} disabled={isFetchingLocation} className="custom-gradient-btn">
                     <FaLocationArrow className="me-2" />
                     {isFetchingLocation ? 'Fetching...' : 'Get My Address'}
                   </Button>
-                  {address && (
-                    <p className="button-info-text">
-                      <strong>📍</strong> {address}
-                    </p>
-                  )}
+                  {address && (<p className="button-info-text"><strong>📍</strong> {address}</p>)}
                 </div>
-
                 <div className="button-with-info shadow-sm">
-  <Button
-    className="custom-gradient-btn"
-    style={{ backgroundColor: isCheckedIn ? '#dc3545' : undefined }}
-    onClick={handleCheckToggle}
-    disabled={
-      !position || isFetchingLocation || (!isCheckedIn && checkInStatus?.color === 'danger')
-    }
-  >
-    <FaClock className="me-2" />
-    {isCheckedIn ? 'Check-Out' : 'Check-In'}
-  </Button>
-
-  <p className="button-info-text">
-    {isCheckedIn
-      ? `✅ Checked In: ${checkInTime}`
-      : checkOutTime
-      ? `⏹️ Checked Out: ${checkOutTime}`
-      : 'Not yet checked in'}
-  </p>
-</div>
-
-{checkInStatus && (
-  <Alert variant={checkInStatus.color} className="shadow-sm">
-    {checkInStatus.message}
-  </Alert>
-)}
-
-
-                {locationError && (
-                  <Alert variant="danger" className="shadow-sm">
-                    {locationError}
-                  </Alert>
-                )}
+                  <Button
+                    className="custom-gradient-btn"
+                    style={{ backgroundColor: isCheckedIn ? '#dc3545' : undefined }}
+                    onClick={handleCheckToggle}
+                    disabled={!position || isFetchingLocation || (!isCheckedIn && checkInStatus?.color === 'danger')}
+                  >
+                    <FaClock className="me-2" />
+                    {isCheckedIn ? 'Check-Out' : 'Check-In'}
+                  </Button>
+                  <p className="button-info-text">
+                    {isCheckedIn ? `✅ Checked In: ${checkInTime}` : checkOutTime ? `⏹️ Checked Out: ${checkOutTime}` : 'Not yet checked in'}
+                  </p>
+                </div>
+                {checkInStatus && (<Alert variant={checkInStatus.color} className="shadow-sm">{checkInStatus.message}</Alert>)}
+                {locationError && (<Alert variant="danger" className="shadow-sm">{locationError}</Alert>)}
               </div>
             </Col>
-
           </Row>
         </Col>
       </Row>
@@ -341,5 +186,3 @@ const LocationTracker = () => {
 };
 
 export default LocationTracker;
-
-
