@@ -110,7 +110,7 @@ const LocationTracker = () => {
     let bestPosition = null;
 
     const options = {
-      enableHighAccuracy: true,
+      enableHighAccuracy: false,
       timeout: 15000,
       maximumAge: 0,
     };
