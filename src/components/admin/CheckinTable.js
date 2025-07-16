@@ -56,7 +56,6 @@ const CheckinTable = () => {
       if (rec.checkedIn) {
         sessionList.push({
           username: rec.username || 'Unknown',
-          address: rec.location?.address || 'N/A',
           date: formatDate(rec.timestamp),
           checkIn: formatTime(rec.timestamp),
           checkOut: null,
@@ -69,7 +68,6 @@ const CheckinTable = () => {
         } else {
           sessionList.push({
             username: rec.username || 'Unknown',
-            address: rec.location?.address || 'N/A',
             date: formatDate(rec.timestamp),
             checkIn: null,
             checkOut: formatTime(rec.timestamp),
@@ -88,7 +86,7 @@ const CheckinTable = () => {
   const doc = new jsPDF();
   doc.text('Employee Logs', 14, 10);
 
-  const tableColumn = ['Date', 'Username', 'Address', 'Check-In', 'Check-Out'];
+  const tableColumn = ['Date', 'Username', 'Check-In', 'Check-Out'];
   const tableRows = [];
 
   sessions
@@ -99,7 +97,6 @@ const CheckinTable = () => {
       tableRows.push([
         entry.date,
         entry.username,
-        entry.address,
         entry.checkIn || '-',
         entry.checkOut || '-',
       ]);
